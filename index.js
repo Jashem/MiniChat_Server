@@ -23,37 +23,24 @@ const io = socket(server);
 
 io.on("connection", socket => {
   socket.on("need Id", msg => {
-    db.User.create({
-      name: chance.first()
-    })
-      .then(function(newUser) {
-        io.sockets.emit("need Id", newUser);
-      })
-      .catch(function(err) {
-        console.log(err);
-      });
+    createUser(socket, "need Id");
   });
 
   socket.on("have Id", msg => {
-    db.User.findById(msg)
-      .then(function(foundUser) {
-        foundUser
-          ? io.sockets.emit("have Id", foundUser)
-          : db.User.create({
-              name: chance.first()
-            })
-              .then(function(newUser) {
-                io.sockets.emit("invalid Id", newUser);
-              })
-              .catch(function(err) {
-                console.log(err);
-              });
-      })
-      .catch(function(err) {
-        console.log(err);
-      });
+    findUser(socket, msg);
   });
 
+  socket.on("chat message", msg => {
+    createMessage(socket, msg);
+    // socket.broadcast.emit("chat message", msg);
+  });
+
+  socket.on("typing", msg => {
+    socket.broadcast.emit("typing", msg);
+  });
+});
+
+const sendOldMessages = socket => {
   db.Message.find()
     .sort({ created_at: -1 })
     .populate("owner_id")
@@ -64,34 +51,56 @@ io.on("connection", socket => {
           user: message.owner_id.name,
           msg: message.msg
         }));
-        io.sockets.emit("chat message", messages);
+        socket.emit("chat message", messages);
       }
     })
     .catch(err => {
       console.log(err);
     });
+};
 
-  socket.on("chat message", msg => {
-    db.Message.create({
-      msg: msg.msg,
-      owner_id: msg.userId
+const createUser = (socket, channel) => {
+  db.User.create({
+    name: chance.first()
+  })
+    .then(function(newUser) {
+      socket.emit(channel, newUser);
     })
-      .then(function(newMessage) {
-        io.sockets.emit("chat message", [
-          {
-            key: newMessage._id,
-            user: msg.userName,
-            msg: msg.msg
-          }
-        ]);
-      })
-      .catch(function(err) {
-        console.log(err);
-      });
-    // socket.broadcast.emit("chat message", msg);
-  });
+    .catch(function(err) {
+      console.log(err);
+    });
+};
 
-  socket.on("typing", msg => {
-    socket.broadcast.emit("typing", msg);
-  });
-});
+const findUser = (socket, id) => {
+  db.User.findById(id)
+    .then(foundUser => {
+      if (foundUser) {
+        socket.emit("have Id", foundUser);
+        sendOldMessages(socket);
+      } else {
+        createUser(socket, "invalid Id");
+      }
+    })
+    .catch(function(err) {
+      console.log(err);
+    });
+};
+
+const createMessage = (socket, msg) => {
+  db.Message.create({
+    msg: msg.msg,
+    owner_id: msg.userId
+  })
+    .then(newMessage => {
+      socket.emit("chat message", [
+        {
+          key: newMessage._id,
+          user: msg.userName,
+          msg: msg.msg
+        }
+      ]);
+    })
+    .catch(function(err) {
+      console.log(err);
+    });
+};
