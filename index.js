@@ -27,7 +27,6 @@ io.on("connection", socket => {
       name: chance.first()
     })
       .then(function(newUser) {
-        console.log(newUser);
         io.sockets.emit("need Id", newUser);
       })
       .catch(function(err) {
@@ -38,13 +37,39 @@ io.on("connection", socket => {
   socket.on("have Id", msg => {
     db.User.findById(msg)
       .then(function(foundUser) {
-        console.log(foundUser);
-        io.sockets.emit("have Id", foundUser);
+        foundUser
+          ? io.sockets.emit("have Id", foundUser)
+          : db.User.create({
+              name: chance.first()
+            })
+              .then(function(newUser) {
+                io.sockets.emit("invalid Id", newUser);
+              })
+              .catch(function(err) {
+                console.log(err);
+              });
       })
       .catch(function(err) {
         console.log(err);
       });
   });
+
+  db.Message.find()
+    .sort({ created_at: -1 })
+    .populate("owner_id")
+    .then(foundmessages => {
+      if (foundmessages) {
+        const messages = foundmessages.map(message => ({
+          key: message._id,
+          user: message.owner_id.name,
+          msg: message.msg
+        }));
+        io.sockets.emit("chat message", messages);
+      }
+    })
+    .catch(err => {
+      console.log(err);
+    });
 
   socket.on("chat message", msg => {
     db.Message.create({
@@ -52,12 +77,13 @@ io.on("connection", socket => {
       owner_id: msg.userId
     })
       .then(function(newMessage) {
-        console.log(newMessage);
-        io.sockets.emit("chat message", {
-          key: newMessage._id,
-          user: msg.userName,
-          msg: msg.msg
-        });
+        io.sockets.emit("chat message", [
+          {
+            key: newMessage._id,
+            user: msg.userName,
+            msg: msg.msg
+          }
+        ]);
       })
       .catch(function(err) {
         console.log(err);
