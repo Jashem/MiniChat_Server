@@ -31,7 +31,8 @@ io.on("connection", socket => {
   });
 
   socket.on("chat message", msg => {
-    createMessage(socket, msg);
+    console.log(msg);
+    createMessage(msg);
     // socket.broadcast.emit("chat message", msg);
   });
 
@@ -65,6 +66,7 @@ const createUser = (socket, channel) => {
   })
     .then(function(newUser) {
       socket.emit(channel, newUser);
+      sendOldMessages(socket);
     })
     .catch(function(err) {
       console.log(err);
@@ -78,7 +80,7 @@ const findUser = (socket, id) => {
         socket.emit("have Id", foundUser);
         sendOldMessages(socket);
       } else {
-        createUser(socket, "invalid Id");
+        createUser("invalid Id");
       }
     })
     .catch(function(err) {
@@ -86,13 +88,13 @@ const findUser = (socket, id) => {
     });
 };
 
-const createMessage = (socket, msg) => {
+const createMessage = msg => {
   db.Message.create({
     msg: msg.msg,
     owner_id: msg.userId
   })
     .then(newMessage => {
-      socket.emit("chat message", [
+      io.sockets.emit("chat message", [
         {
           key: newMessage._id,
           user: msg.userName,
